@@ -27,7 +27,7 @@ MAX_VEL_ERR = 5.0
 
 ButtonEvent = car.CarState.ButtonEvent
 ButtonType = car.CarState.ButtonEvent.Type
-CRUISE_LONG_PRESS = 80
+CRUISE_LONG_PRESS = 100
 CRUISE_NEAREST_FUNC = {
   ButtonType.accelCruise: math.ceil,
   ButtonType.decelCruise: math.floor,
