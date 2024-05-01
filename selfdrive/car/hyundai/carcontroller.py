@@ -207,7 +207,7 @@ class CarController:
       if self.CP.flags & HyundaiFlags.ENABLE_BLINKERS:
         can_sends.append([0x7b1, 0, b"\x02\x3E\x80\x00\x00\x00\x00\x00", self.CAN.ECAN])
 
-    # CAN-FD platforms
+    # CAN-FD platforms:
     if self.CP.carFingerprint in CANFD_CAR:
       hda2 = self.CP.flags & HyundaiFlags.CANFD_HDA2
       hda2_long = hda2 and self.CP.openpilotLongitudinalControl
@@ -249,6 +249,7 @@ class CarController:
             if self.cruise_button is not None:
               if self.frame % 2 == 0:
                 can_sends.append(hyundaicanfd.create_buttons(self.packer, self.CP, self.CAN, ((self.frame // 2) + 1) % 0x10, self.cruise_button))
+    # NON CAN-FD Platforms:
     else:
       can_sends.append(hyundaican.create_lkas11(self.packer, self.frame, self.car_fingerprint, apply_steer, apply_steer_req,
                                                 torque_fault, CS.lkas11, sys_warning, sys_state, CC.enabled,
@@ -257,6 +258,7 @@ class CarController:
                                                 lateral_paused, blinking_icon))
 
       if not self.CP.openpilotLongitudinalControl:
+        # CALLED TO SET THE STOCK SPEED
         can_sends.extend(self.create_button_messages(CC, CS, use_clu11=True))
         if not (CC.cruiseControl.cancel or CC.cruiseControl.resume) and CS.out.cruiseState.enabled and not self.CP.pcmCruiseSpeed:
           self.cruise_button = self.get_cruise_buttons(CS, CC.vCruise)
@@ -345,7 +347,7 @@ class CarController:
 
     return can_sends
 
-  # multikyd methods, sunnyhaibin logic
+  # multikyd methods, sunnyhaibin logic below----------------------------------------------------|
   def get_cruise_buttons_status(self, CS):
     if not CS.out.cruiseState.enabled or CS.cruise_buttons[-1] != Buttons.NONE:
       self.timer = 40
@@ -363,7 +365,7 @@ class CarController:
         v_cruise_kph = v_cruise_kph_prev
     return v_cruise_kph
 
-  def get_button_type(self, button_type):
+  def get_button_type(self, button_type): #Return correct button to press based on button type
     self.type_status = "type_" + str(button_type)
     self.button_picker = getattr(self, self.type_status, lambda: "default")
     return self.button_picker()
@@ -415,7 +417,7 @@ class CarController:
       self.button_type = 0
     return cruise_button
 
-  def get_curve_speed(self, target_speed_kph, v_cruise_kph_prev):
+  def get_curve_speed(self, target_speed_kph, v_cruise_kph_prev): # Function for curve speed control
     if self.v_tsc_state != 0:
       vision_v_cruise_kph = self.v_tsc * CV.MS_TO_KPH
       if int(vision_v_cruise_kph) == int(v_cruise_kph_prev):
@@ -448,16 +450,19 @@ class CarController:
     cruise_button = None
     if not self.get_cruise_buttons_status(CS):
       pass
+# Below is code used when Stock control is used:
     elif CS.out.cruiseState.enabled:
-      set_speed_kph = self.get_target_speed(v_cruise_kph_prev)
+      set_speed_kph = self.get_target_speed(v_cruise_kph_prev) #Get a speed value
       if self.slc_state > 1:
         target_speed_kph = set_speed_kph
       else:
-        target_speed_kph = min(v_cruise_kph_prev, set_speed_kph)
+        target_speed_kph = min(v_cruise_kph_prev, set_speed_kph) 
       if self.v_tsc_state != 0 or self.m_tsc_state > 1:
-        self.final_speed_kph = self.get_curve_speed(target_speed_kph, v_cruise_kph_prev)
+        self.final_speed_kph = self.get_curve_speed(target_speed_kph, v_cruise_kph_prev) 
       else:
-        self.final_speed_kph = target_speed_kph
+        self.final_speed_kph = target_speed_kph 
+      
+      # Need to print function called and target_speed_kph and self.final_speed_kph for debug
 
-      cruise_button = self.get_button_control(CS, self.final_speed_kph, v_cruise_kph_prev)  # MPH/KPH based button presses
+      cruise_button = self.get_button_control(CS, self.final_speed_kph, v_cruise_kph_prev) # Calls function to find out which button to press?
     return cruise_button
