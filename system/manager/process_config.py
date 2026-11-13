@@ -4,6 +4,7 @@ from cereal import car
 from openpilot.common.params import Params
 from openpilot.system.hardware import PC, TICI
 from openpilot.selfdrive.modeld.custom_model_metadata import CustomModelMetadata, ModelCapabilities
+from openpilot.selfdrive.car.hyundai.values import CAR as HYUNDAI_CAR
 from openpilot.system.manager.process import PythonProcess, NativeProcess, DaemonProcess
 from openpilot.system.mapd_manager import MAPD_PATH, COMMON_DIR
 from openpilot.system.manager.sunnylink import sunnylink_need_register, sunnylink_ready, use_sunnylink_uploader
@@ -18,6 +19,9 @@ def notcar(started: bool, params: Params, CP: car.CarParams) -> bool:
 
 def iscar(started: bool, params: Params, CP: car.CarParams) -> bool:
   return started and not CP.notCar
+
+def stock_long_debug(started: bool, params: Params, CP: car.CarParams) -> bool:
+  return started and CP.carFingerprint == HYUNDAI_CAR.HYUNDAI_GENESIS and CP.customStockLongAvailable and not CP.openpilotLongitudinalControl
 
 def logging(started, params, CP: car.CarParams) -> bool:
   run = (not CP.notCar) or not params.get_bool("DisableLogging")
@@ -82,6 +86,7 @@ procs = [
   PythonProcess("navmodeld", "selfdrive.modeld.navmodeld", model_use_nav),
   NativeProcess("sensord", "system/sensord", ["./sensord"], only_onroad, enabled=not PC),
   NativeProcess("ui", "selfdrive/ui", ["./ui"], always_run, watchdog_max_dt=(5 if not PC else None)),
+  PythonProcess("stock_long_debug", "selfdrive.ui.stock_long_debug", stock_long_debug),
   PythonProcess("soundd", "selfdrive.ui.soundd", only_onroad),
   NativeProcess("locationd", "selfdrive/locationd", ["./locationd"], only_onroad),
   NativeProcess("pandad", "selfdrive/pandad", ["./pandad"], always_run, enabled=False),
