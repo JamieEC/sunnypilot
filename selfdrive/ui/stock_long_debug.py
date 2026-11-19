@@ -37,18 +37,22 @@ def button_name(button):
 class RotatedDebugWindow(QWidget):
   def __init__(self, screen):
     super().__init__()
-    self.text = ""
-    self.font = QFont("monospace", max(12, min(18, screen.width() // 120)))
+    self.lines = []
+    self.font = QFont("monospace")
+    panel_width = int(screen.width() * 0.36)
+    font_size = min(screen.width() // 70, int(panel_width / 15 * 0.75), 32)
+    self.font.setPixelSize(max(18, font_size))
+    self.font.setBold(True)
     self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus)
     self.setAttribute(Qt.WA_TranslucentBackground)
     self.setAttribute(Qt.WA_TransparentForMouseEvents)
 
-    width = int(screen.width() * 0.28)
+    width = panel_width
     height = int(screen.height() * 0.82)
     self.setGeometry(screen.x() + 24, screen.y() + 80, width, height)
 
-  def setText(self, text):
-    self.text = text
+  def setLines(self, lines):
+    self.lines = lines
     self.update()
 
   def paintEvent(self, _event):
@@ -59,11 +63,19 @@ class RotatedDebugWindow(QWidget):
 
     content_rect = QRectF(0, 0, self.height(), self.width())
     painter.fillRect(content_rect, QColor(0, 0, 0, 205))
-    painter.setPen(QColor("#ffcc00"))
+    painter.setPen(QColor("#5ee7ff"))
     painter.drawRect(content_rect.adjusted(1, 1, -1, -1))
-    painter.setPen(QColor("#ffffff"))
     painter.setFont(self.font)
-    painter.drawText(content_rect.adjusted(14, 14, -14, -14), Qt.AlignLeft | Qt.AlignTop | Qt.TextWordWrap, self.text)
+    metrics = painter.fontMetrics()
+    line_height = metrics.lineSpacing() + 3
+    available_width = int(content_rect.width()) - 32
+    y = 16 + metrics.ascent()
+    for text, color in self.lines:
+      if y + metrics.descent() > content_rect.height() - 12:
+        break
+      painter.setPen(QColor(color))
+      painter.drawText(16, y, metrics.elidedText(text, Qt.ElideRight, available_width))
+      y += line_height
     painter.end()
 
 
@@ -161,25 +173,28 @@ def main():
     if request_started_time is not None:
       request_age = f"{now - request_started_time:.2f} s"
 
-    window.setText(
-      "STOCK LONG DEBUG\n"
-      f"Planner target: {debug.finalSpeedKph:.1f} km/h\n"
-      f"Car-reported set speed: {read_speed_kph:.1f} km/h "
-      f"({'enabled' if cruise_state.enabled else 'disabled'})\n"
-      f"Last set-speed change: {speed_change} ({speed_change_age})\n"
-      f"Controller read: {debug.vSetDis:.0f} dash units | "
-      f"controller target: {debug.targetSpeed:.0f} | diff: {debug.speedDiff:+.1f}\n"
-      f"Requested: {button_name(requested_button)} for {request_age}\n"
-      f"Button state: {BUTTON_STATES.get(int(debug.buttonType), str(debug.buttonType))}\n"
-      f"Panda sendcan queued: {button_name(last_tx_button)} ({tx_age})\n"
-      f"TX CLU11 data: {last_tx_data or 'none'}\n"
-      f"TX frames seen in last second: {len(tx_frames)}\n"
-      f"Bus-observed CLU11: {button_name(last_rx_button)} ({rx_age})\n"
-      f"RX button transition: {f'{now - last_rx_change_time:.1f} s ago' if last_rx_change_time is not None else 'never'}\n"
-      f"RX CLU11 data: {last_rx_data or 'none'}\n"
-      f"Bus CLU11 frames seen in last second: {len(rx_frames)}\n"
-      "Bus-observed data is not proof the cruise ECU accepted the command."
-    )
+    tx_color = "#ffc857" if tx_frames else "#9aa0a6"
+    rx_color = "#5ee7ff" if rx_frames else "#9aa0a6"
+    request_color = "#62e890" if requested_button == 1 else "#ff875e" if requested_button == 2 else "#d7dce2"
+    speed_color = "#62e890" if cruise_state.enabled else "#ffcc66"
+    change_color = "#62e890" if last_speed_change is not None else "#d7dce2"
+    window.setLines([
+      ("STOCK LONG DEBUG", "#5ee7ff"),
+      (f"[TARGET] Planner {debug.finalSpeedKph:.1f} km/h", "#ffcc66"),
+      (f"[CAR] Set speed {read_speed_kph:.1f} km/h - {'ON' if cruise_state.enabled else 'OFF'}", speed_color),
+      (f"[CHANGE] {speed_change} ({speed_change_age})", change_color),
+      (f"[TRACK] Read {debug.vSetDis:.0f} | target {debug.targetSpeed:.0f} | diff {debug.speedDiff:+.1f}", "#d7dce2"),
+      (f"[REQUEST] {button_name(requested_button)} for {request_age}", request_color),
+      (f"[STATE] {BUTTON_STATES.get(int(debug.buttonType), str(debug.buttonType))}", "#d7dce2"),
+      (f"[TX] Panda queued {button_name(last_tx_button)} ({tx_age})", tx_color),
+      (f"[TX] CLU11 {last_tx_data or 'none'}", "#ffc857"),
+      (f"[TX] {len(tx_frames)} frames in last second", tx_color),
+      (f"[RX] Bus button {button_name(last_rx_button)} ({rx_age})", rx_color),
+      (f"[RX] Transition {f'{now - last_rx_change_time:.1f} s ago' if last_rx_change_time is not None else 'never'}", rx_color),
+      (f"[RX] CLU11 {last_rx_data or 'none'}", "#5ee7ff"),
+      (f"[RX] {len(rx_frames)} frames in last second", rx_color),
+      ("[NOTE] CAN seen != cruise accepted", "#ff8c8c"),
+    ])
     window.show()
 
   timer = QTimer()
